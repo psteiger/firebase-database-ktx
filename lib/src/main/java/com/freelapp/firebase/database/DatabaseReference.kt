@@ -6,9 +6,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.*
 
 @DslMarker
 annotation class FirebaseDatabaseDsl
@@ -28,7 +26,8 @@ interface ChildListenerScope {
     fun onCancelled(block: (DatabaseError) -> Unit)
 }
 
-class ValueListenerScopeImpl : ValueListenerScope {
+@PublishedApi
+internal class ValueListenerScopeImpl : ValueListenerScope {
     var onDataChange: (DataSnapshot) -> Unit = {}
     var onCancelled: (DatabaseError) -> Unit = {}
 
@@ -41,7 +40,8 @@ class ValueListenerScopeImpl : ValueListenerScope {
     }
 }
 
-class ChildListenerScopeImpl : ChildListenerScope {
+@PublishedApi
+internal class ChildListenerScopeImpl : ChildListenerScope {
     var onChildAdded: (DataSnapshot, String?) -> Unit = { _, _ -> }
     var onChildChanged: (DataSnapshot, String?) -> Unit = { _, _ -> }
     var onChildRemoved: (DataSnapshot) -> Unit = {}
@@ -107,10 +107,14 @@ inline fun childrenListener(crossinline block: ChildListenerScope.() -> Unit): C
         }
     }
 
-fun DatabaseReference.addValueListener(block: ValueListenerScope.() -> Unit): ValueEventListener =
+inline fun DatabaseReference.addValueListener(
+    crossinline block: ValueListenerScope.() -> Unit
+): ValueEventListener =
     addValueEventListener(valueListener(block))
 
-fun DatabaseReference.addChildrenListener(block: ChildListenerScope.() -> Unit): ChildEventListener =
+inline fun DatabaseReference.addChildrenListener(
+    crossinline block: ChildListenerScope.() -> Unit
+): ChildEventListener =
     addChildEventListener(childrenListener(block))
 
 @ExperimentalCoroutinesApi
@@ -121,7 +125,7 @@ fun DatabaseReference.valueFlow(): Flow<DataSnapshot> =
             onCancelled { cancel("Flow cancelled with exception", it.toException()) }
         }
         awaitClose { removeEventListener(listener) }
-    }.flowOn(Dispatchers.IO)
+    }.applyOperators()
 
 @ExperimentalCoroutinesApi
 fun DatabaseReference.childrenFlow(): Flow<List<DataSnapshot>> =
@@ -163,4 +167,7 @@ fun DatabaseReference.childrenFlow(): Flow<List<DataSnapshot>> =
             onCancelled { cancel("Flow cancelled with exception", it.toException()) }
         }
         awaitClose { removeEventListener(listener) }
-    }.flowOn(Dispatchers.IO)
+    }.applyOperators()
+
+private fun <T> Flow<T>.applyOperators(): Flow<T> =
+    conflate().flowOn(Dispatchers.IO)
