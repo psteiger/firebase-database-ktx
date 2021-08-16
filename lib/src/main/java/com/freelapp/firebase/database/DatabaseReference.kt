@@ -1,11 +1,9 @@
 package com.freelapp.firebase.database
 
 import com.google.firebase.database.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.*
+import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.flow.*
 
 @DslMarker
@@ -127,41 +125,46 @@ fun DatabaseReference.valueFlow(): Flow<DataSnapshot> =
         awaitClose { removeEventListener(listener) }
     }.applyOperators()
 
+@ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
 fun DatabaseReference.childrenFlow(): Flow<List<DataSnapshot>> =
     callbackFlow {
-        val snapshots = mutableListOf<DataSnapshot>()
-        fun nextIndex(s: String?) =
-            if (s == null) 0 else snapshots.indexOfFirst { it.key == s } + 1
+        // Actor is used to run operations in a worker thread.
+        // Firebase's Realtime Database callbacks are received in the main thread.
+        val channel = actor<MutableList<DataSnapshot>.() -> Unit>(capacity = UNLIMITED) {
+            val snapshots = mutableListOf<DataSnapshot>()
+            for (msg in channel) {
+                msg(snapshots)
+                trySend(snapshots.toList())
+            }
+        }
+        fun MutableList<DataSnapshot>.nextIndex(s: String?) =
+            if (s == null) 0 else indexOfFirst { it.key == s } + 1
         val listener = addChildrenListener {
             onChildAdded { dataSnapshot, s ->
-                with(snapshots) {
+                channel.trySend {
                     add(nextIndex(s), dataSnapshot)
-                    trySendBlocking(toList())
                 }
             }
             onChildChanged { dataSnapshot, s ->
-                val index = nextIndex(s)
-                with (snapshots) {
+                channel.trySend {
+                    val index = nextIndex(s)
                     removeAt(index)
                     add(index, dataSnapshot)
-                    trySendBlocking(toList())
                 }
             }
             onChildRemoved { dataSnapshot ->
-                with (snapshots) {
+                channel.trySend {
                     val index = indexOfFirst { it.key == dataSnapshot.key }
                     removeAt(index)
-                    trySendBlocking(toList())
                 }
             }
             onChildMoved { dataSnapshot, s ->
-                with (snapshots) {
-                    val oldIndex = indexOfFirst { it.key == dataSnapshot.key }
+                channel.trySend {
+                    val currIndex = indexOfFirst { it.key == dataSnapshot.key }
                     val newIndex = nextIndex(s)
-                    removeAt(oldIndex)
+                    removeAt(currIndex)
                     add(newIndex, dataSnapshot)
-                    trySendBlocking(toList())
                 }
             }
             onCancelled { cancel("Flow cancelled with exception", it.toException()) }
