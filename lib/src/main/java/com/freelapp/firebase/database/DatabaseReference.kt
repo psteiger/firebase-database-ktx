@@ -127,17 +127,17 @@ fun DatabaseReference.valueFlow(): Flow<DataSnapshot> =
 fun DatabaseReference.childrenFlow(): Flow<List<DataSnapshot>> =
     callbackFlow {
         val snapshots = mutableListOf<DataSnapshot>()
-        fun indexOf(s: String?) =
-            if (s == null) 0 else snapshots.indexOfFirst { it.key == s }
+        fun nextIndex(s: String?) =
+            if (s == null) 0 else snapshots.indexOfFirst { it.key == s } + 1
         val listener = addChildrenListener {
             onChildAdded { dataSnapshot, s ->
                 with(snapshots) {
-                    add(indexOf(s) + 1, dataSnapshot)
+                    add(nextIndex(s), dataSnapshot)
                     trySendBlocking(toList())
                 }
             }
             onChildChanged { dataSnapshot, s ->
-                val index = indexOf(s) + 1
+                val index = nextIndex(s)
                 with (snapshots) {
                     removeAt(index)
                     add(index, dataSnapshot)
@@ -154,7 +154,7 @@ fun DatabaseReference.childrenFlow(): Flow<List<DataSnapshot>> =
             onChildMoved { dataSnapshot, s ->
                 with (snapshots) {
                     val oldIndex = indexOfFirst { it.key == dataSnapshot.key }
-                    val newIndex = indexOf(s) + 1
+                    val newIndex = nextIndex(s)
                     removeAt(oldIndex)
                     add(newIndex, dataSnapshot)
                     trySendBlocking(toList())
