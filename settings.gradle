@@ -7,4 +7,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "firebase-database-ktx"
-include ':firebase-database-ktx'
+include ':lib'
