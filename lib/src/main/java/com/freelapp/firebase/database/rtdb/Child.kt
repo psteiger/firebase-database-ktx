@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.callbackFlow
 
 @ObsoleteCoroutinesApi
 @ExperimentalCoroutinesApi
-fun DatabaseReference.childrenFlow(): Flow<List<DataSnapshot>> =
+fun Query.childrenFlow(): Flow<List<DataSnapshot>> =
     callbackFlow {
         // Actor is used to run the list operations in a worker thread.
         // Firebase's Realtime Database callbacks are received in the main thread.
@@ -59,7 +59,7 @@ fun DatabaseReference.childrenFlow(): Flow<List<DataSnapshot>> =
         awaitClose { removeEventListener(listener) }
     }.applyOperators()
 
-inline fun DatabaseReference.addChildrenListener(
+inline fun Query.addChildrenListener(
     crossinline block: ChildListenerScope.() -> Unit
 ): ChildEventListener =
     addChildEventListener(childrenListener(block))
