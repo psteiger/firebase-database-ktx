@@ -1,9 +1,6 @@
 package com.freelapp.firebase.database.rtdb
 
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
@@ -12,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 @ExperimentalCoroutinesApi
-fun DatabaseReference.valueFlow(): Flow<DataSnapshot> =
+fun Query.valueFlow(): Flow<DataSnapshot> =
     callbackFlow {
         val listener = addValueListener {
             onDataChange { trySendBlocking(it) }
@@ -21,7 +18,7 @@ fun DatabaseReference.valueFlow(): Flow<DataSnapshot> =
         awaitClose { removeEventListener(listener) }
     }.applyOperators()
 
-inline fun DatabaseReference.addValueListener(
+inline fun Query.addValueListener(
     crossinline block: ValueListenerScope.() -> Unit
 ): ValueEventListener =
     addValueEventListener(valueListener(block))
