@@ -7,6 +7,23 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
+
+inline fun <reified T> DataSnapshot.value(): T =
+    getValue(T::class.java)!!
+
+suspend inline fun <reified T> Query.value(): T =
+    snapshot().value()
+
+suspend fun Query.snapshot(): DataSnapshot =
+    suspendCoroutine { cont ->
+        addSingleValueListener {
+            onDataChange { cont.resume(it) }
+            onCancelled { cont.resumeWithException(it.toException()) }
+        }
+    }
 
 @ExperimentalCoroutinesApi
 fun Query.valueFlow(): Flow<DataSnapshot> =
@@ -17,6 +34,12 @@ fun Query.valueFlow(): Flow<DataSnapshot> =
         }
         awaitClose { removeEventListener(listener) }
     }.applyOperators()
+
+inline fun Query.addSingleValueListener(
+    crossinline block: ValueListenerScope.() -> Unit
+) {
+    addListenerForSingleValueEvent(valueListener(block))
+}
 
 inline fun Query.addValueListener(
     crossinline block: ValueListenerScope.() -> Unit

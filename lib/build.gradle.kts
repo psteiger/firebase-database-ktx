@@ -8,7 +8,6 @@ android {
     compileSdk = 30
     defaultConfig {
         minSdk = 21
-        targetSdk = 30
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -20,7 +19,8 @@ android {
 }
 
 dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:28.3.0"))
+    implementation(kotlin("stdlib-jdk8"))
+    implementation(platform("com.google.firebase:firebase-bom:${Versions.firebase}"))
     implementation("com.google.firebase:firebase-database")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${Versions.coroutines}")
 }
