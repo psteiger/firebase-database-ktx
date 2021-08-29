@@ -7,6 +7,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -17,6 +18,9 @@ inline fun <reified T> DataSnapshot.value(): T =
 suspend inline fun <reified T> Query.value(): T =
     snapshot().value()
 
+suspend inline fun <reified T> Query.tryValue(): Result<T> =
+    runCatching { value() }
+
 suspend fun Query.snapshot(): DataSnapshot =
     suspendCoroutine { cont ->
         addSingleValueListener {
@@ -26,7 +30,7 @@ suspend fun Query.snapshot(): DataSnapshot =
     }
 
 @ExperimentalCoroutinesApi
-fun Query.valueFlow(): Flow<DataSnapshot> =
+fun Query.snapshotFlow(): Flow<DataSnapshot> =
     callbackFlow {
         val listener = addValueListener {
             onDataChange { trySendBlocking(it) }
@@ -34,6 +38,22 @@ fun Query.valueFlow(): Flow<DataSnapshot> =
         }
         awaitClose { removeEventListener(listener) }
     }.applyOperators()
+
+@ExperimentalCoroutinesApi
+inline fun <reified T> Query.valueFlow(): Flow<T> =
+    valueFlow { it.getValue(T::class.java)!! }
+
+@ExperimentalCoroutinesApi
+inline fun <reified T> Query.tryValueFlow(): Flow<Result<T>> =
+    tryValueFlow { it.getValue(T::class.java)!! }
+
+@ExperimentalCoroutinesApi
+inline fun <reified T> Query.valueFlow(crossinline transform: (DataSnapshot) -> T): Flow<T> =
+    snapshotFlow().map { transform(it) }
+
+@ExperimentalCoroutinesApi
+inline fun <reified T> Query.tryValueFlow(crossinline transform: (DataSnapshot) -> T): Flow<Result<T>> =
+    snapshotFlow().map { runCatching { transform(it) } }
 
 inline fun Query.addSingleValueListener(
     crossinline block: ValueListenerScope.() -> Unit

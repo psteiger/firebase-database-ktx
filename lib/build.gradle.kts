@@ -19,7 +19,6 @@ android {
 }
 
 dependencies {
-    implementation(kotlin("stdlib-jdk8"))
     implementation(platform("com.google.firebase:firebase-bom:${Versions.firebase}"))
     implementation("com.google.firebase:firebase-database")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${Versions.coroutines}")
