@@ -48,26 +48,26 @@ inline fun <reified T> Query.tryValueFlow(): Flow<Result<T>> =
     tryValueFlow { it.getValue(T::class.java)!! }
 
 @ExperimentalCoroutinesApi
-inline fun <reified T> Query.valueFlow(crossinline transform: (DataSnapshot) -> T): Flow<T> =
+inline fun <reified T> Query.valueFlow(noinline transform: (DataSnapshot) -> T): Flow<T> =
     snapshotFlow().map { transform(it) }
 
 @ExperimentalCoroutinesApi
-inline fun <reified T> Query.tryValueFlow(crossinline transform: (DataSnapshot) -> T): Flow<Result<T>> =
+inline fun <reified T> Query.tryValueFlow(noinline transform: (DataSnapshot) -> T): Flow<Result<T>> =
     snapshotFlow().map { runCatching { transform(it) } }
 
-inline fun Query.addSingleValueListener(
-    crossinline block: ValueListenerScope.() -> Unit
+fun Query.addSingleValueListener(
+    block: ValueListenerScope.() -> Unit
 ) {
     addListenerForSingleValueEvent(valueListener(block))
 }
 
-inline fun Query.addValueListener(
-    crossinline block: ValueListenerScope.() -> Unit
+fun Query.addValueListener(
+    block: ValueListenerScope.() -> Unit
 ): ValueEventListener =
     addValueEventListener(valueListener(block))
 
-inline fun valueListener(
-    crossinline block: ValueListenerScope.() -> Unit
+fun valueListener(
+    block: ValueListenerScope.() -> Unit
 ): ValueEventListener =
     ValueListenerScopeImpl().apply(block).build()
 

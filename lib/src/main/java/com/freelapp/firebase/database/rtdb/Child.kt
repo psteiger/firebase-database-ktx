@@ -59,13 +59,13 @@ fun Query.childrenFlow(): Flow<List<DataSnapshot>> =
         awaitClose { removeEventListener(listener) }
     }.applyOperators()
 
-inline fun Query.addChildrenListener(
-    crossinline block: ChildListenerScope.() -> Unit
+fun Query.addChildrenListener(
+    block: ChildListenerScope.() -> Unit
 ): ChildEventListener =
     addChildEventListener(childrenListener(block))
 
-inline fun childrenListener(
-    crossinline block: ChildListenerScope.() -> Unit
+fun childrenListener(
+    block: ChildListenerScope.() -> Unit
 ): ChildEventListener =
     ChildListenerScopeImpl().apply(block).build()
 
