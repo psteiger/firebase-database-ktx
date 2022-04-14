@@ -19,9 +19,9 @@ android {
 }
 
 dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:${Versions.firebase}"))
+    implementation(platform("com.google.firebase:firebase-bom:29.3.0"))
     implementation("com.google.firebase:firebase-database")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${Versions.coroutines}")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1")
 }
 
 afterEvaluate {

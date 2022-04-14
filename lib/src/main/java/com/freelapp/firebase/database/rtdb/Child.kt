@@ -1,132 +1,79 @@
 package com.freelapp.firebase.database.rtdb
 
-import com.google.firebase.database.*
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
+import com.google.firebase.database.ChildEventListener
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.Query
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
-import kotlinx.coroutines.channels.actor
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.*
 
-@ObsoleteCoroutinesApi
-@ExperimentalCoroutinesApi
-fun Query.childrenFlow(): Flow<List<DataSnapshot>> =
-    callbackFlow {
-        // Actor is used to run the list operations in a worker thread.
-        // Firebase's Realtime Database callbacks are received in the main thread.
-        val channel = actor<MutableList<DataSnapshot>.() -> Unit>(capacity = UNLIMITED) {
-            val snapshots = mutableListOf<DataSnapshot>()
-            for (msg in channel) {
-                msg(snapshots)
-                trySend(snapshots.toList())
-            }
-        }
-
-        fun MutableList<DataSnapshot>.nextIndex(s: String?) =
-            if (s == null) 0 else indexOfFirst { it.key == s } + 1
-
-        val listener = addChildrenListener {
-            onChildAdded { dataSnapshot, s ->
-                channel.trySend {
-                    add(nextIndex(s), dataSnapshot)
-                }
-            }
-            onChildChanged { dataSnapshot, s ->
-                channel.trySend {
-                    val index = nextIndex(s)
-                    removeAt(index)
-                    add(index, dataSnapshot)
-                }
-            }
-            onChildRemoved { dataSnapshot ->
-                channel.trySend {
-                    val index = indexOfFirst { it.key == dataSnapshot.key }
-                    removeAt(index)
-                }
-            }
-            onChildMoved { dataSnapshot, s ->
-                channel.trySend {
-                    val currIndex = indexOfFirst { it.key == dataSnapshot.key }
-                    val newIndex = nextIndex(s)
-                    removeAt(currIndex)
-                    add(newIndex, dataSnapshot)
-                }
-            }
-            onCancelled { cancel("Flow cancelled with exception", it.toException()) }
-        }
-        awaitClose { removeEventListener(listener) }
-    }.applyOperators()
-
-fun Query.addChildrenListener(
-    block: ChildListenerScope.() -> Unit
-): ChildEventListener =
-    addChildEventListener(childrenListener(block))
-
-fun childrenListener(
-    block: ChildListenerScope.() -> Unit
-): ChildEventListener =
-    ChildListenerScopeImpl().apply(block).build()
-
-@FirebaseRealtimeDatabaseDsl
-interface ChildListenerScope {
-    fun onChildAdded(block: (DataSnapshot, String?) -> Unit)
-    fun onChildChanged(block: (DataSnapshot, String?) -> Unit)
-    fun onChildRemoved(block: (DataSnapshot) -> Unit)
-    fun onChildMoved(block: (DataSnapshot, String?) -> Unit)
-    fun onCancelled(block: (DatabaseError) -> Unit)
+sealed class ChildEvent {
+    data class ChildAdded(val snapshot: DataSnapshot, val previousChildName: String?) : ChildEvent()
+    data class ChildChanged(val snapshot: DataSnapshot, val previousChildName: String?) : ChildEvent()
+    data class ChildRemoved(val snapshot: DataSnapshot) : ChildEvent()
+    data class ChildMoved(val snapshot: DataSnapshot, val previousChildName: String?) : ChildEvent()
 }
 
-@PublishedApi
-internal class ChildListenerScopeImpl : ChildListenerScope {
-    internal var onChildAdded: (DataSnapshot, String?) -> Unit = { _, _ -> }
-    internal var onChildChanged: (DataSnapshot, String?) -> Unit = { _, _ -> }
-    internal var onChildRemoved: (DataSnapshot) -> Unit = {}
-    internal var onChildMoved: (DataSnapshot, String?) -> Unit = { _, _ -> }
-    internal var onCancelled: (DatabaseError) -> Unit = {}
-
-    override fun onChildAdded(block: (DataSnapshot, String?) -> Unit) {
-        onChildAdded = block
-    }
-
-    override fun onChildChanged(block: (DataSnapshot, String?) -> Unit) {
-        onChildChanged = block
-    }
-
-    override fun onChildMoved(block: (DataSnapshot, String?) -> Unit) {
-        onChildMoved = block
-    }
-
-    override fun onChildRemoved(block: (DataSnapshot) -> Unit) {
-        onChildRemoved = block
-    }
-
-    override fun onCancelled(block: (DatabaseError) -> Unit) {
-        onCancelled = block
-    }
-}
-
-@PublishedApi
-internal fun ChildListenerScopeImpl.build(): ChildEventListener =
-    object : ChildEventListener {
+fun Query.childEventFlow(): Flow<ChildEvent> = callbackFlow {
+    val listener = object : ChildEventListener {
         override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
-            this@build.onChildAdded(snapshot, previousChildName)
+            trySend(ChildEvent.ChildAdded(snapshot, previousChildName))
         }
 
         override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
-            this@build.onChildChanged(snapshot, previousChildName)
+            trySend(ChildEvent.ChildChanged(snapshot, previousChildName))
         }
 
         override fun onChildRemoved(snapshot: DataSnapshot) {
-            this@build.onChildRemoved(snapshot)
+            trySend(ChildEvent.ChildRemoved(snapshot))
         }
 
         override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {
-            this@build.onChildMoved(snapshot, previousChildName)
+            trySend(ChildEvent.ChildMoved(snapshot, previousChildName))
         }
 
         override fun onCancelled(error: DatabaseError) {
-            this@build.onCancelled(error)
+            cancel("API Error", error.toException())
         }
     }
+    addChildEventListener(listener)
+    awaitClose { removeEventListener(listener) }
+}.buffer(UNLIMITED)
+
+fun Flow<ChildEvent>.toChildrenFlow(): Flow<List<DataSnapshot>> = flow {
+    fun Iterable<DataSnapshot>.indexOf(key: String?) = when (key) {
+        null -> -1
+        else -> indexOfFirst { it.key == key }
+    }
+    fun MutableList<DataSnapshot>.consume(event: ChildEvent) {
+        when (event) {
+            is ChildEvent.ChildAdded -> {
+                val index = 1 + indexOf(event.previousChildName)
+                add(index, event.snapshot)
+            }
+            is ChildEvent.ChildChanged -> {
+                val index = 1 + indexOf(event.previousChildName)
+                set(index, event.snapshot)
+            }
+            is ChildEvent.ChildMoved -> {
+                val currIndex = indexOf(event.snapshot.key)
+                val newIndex = 1 + indexOf(event.previousChildName)
+                removeAt(currIndex)
+                add(newIndex, event.snapshot)
+            }
+            is ChildEvent.ChildRemoved -> {
+                val index = indexOf(event.snapshot.key)
+                removeAt(index)
+            }
+        }
+    }
+    val snapshots = mutableListOf<DataSnapshot>()
+    collect { event ->
+        snapshots.consume(event)
+        emit(snapshots.toList())
+    }
+}.conflate()
+
+fun Query.childrenFlow(): Flow<List<DataSnapshot>> = childEventFlow().toChildrenFlow()
