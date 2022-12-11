@@ -5,6 +5,7 @@ plugins {
 }
 
 android {
+    namespace = "com.freelapp.firebase.database.rtdb"
     compileSdk = 33
     defaultConfig {
         minSdk = 21
@@ -19,7 +20,7 @@ android {
 }
 
 dependencies {
-    implementation(platform("com.google.firebase:firebase-bom:31.0.2"))
+    implementation(platform("com.google.firebase:firebase-bom:31.1.1"))
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
 }
