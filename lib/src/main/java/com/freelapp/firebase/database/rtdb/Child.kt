@@ -2,6 +2,7 @@ package com.freelapp.firebase.database.rtdb
 
 import com.google.firebase.database.*
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
@@ -21,9 +22,9 @@ fun Query.children(): Flow<ChildEvent> = callbackFlow {
     awaitClose {
         removeEventListener(listener)
     }
-}
+}.buffer(Channel.UNLIMITED)
 
-fun Query.childrenWithInitialData(): Flow<FirebaseEvent> = callbackFlow {
+fun Query.childrenWithInitialData(): Flow<FirebaseEvent> = callbackFlow<FirebaseEvent> {
     var initialDataLoaded = false
     val childListener = object : ChildEventListener {
         override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
@@ -48,7 +49,7 @@ fun Query.childrenWithInitialData(): Flow<FirebaseEvent> = callbackFlow {
     }
     val singleListener = object : ValueEventListener {
         override fun onDataChange(snapshot: DataSnapshot) {
-            trySend(InitialData(snapshot.children.toList()))
+            trySendBlocking(InitialData(snapshot.children.toList()))
             initialDataLoaded = true
         }
         override fun onCancelled(error: DatabaseError) {
@@ -61,7 +62,7 @@ fun Query.childrenWithInitialData(): Flow<FirebaseEvent> = callbackFlow {
         removeEventListener(singleListener)
         removeEventListener(childListener)
     }
-}
+}.buffer(Channel.UNLIMITED)
 
 fun Flow<FirebaseEvent>.onInitialData(
     block: suspend (List<DataSnapshot>) -> Unit
