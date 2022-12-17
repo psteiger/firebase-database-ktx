@@ -20,7 +20,7 @@ data class ChildChanged(override val snapshot: DataSnapshot, val previousChildNa
 data class ChildRemoved(override val snapshot: DataSnapshot) : ChildEvent
 data class ChildMoved(override val snapshot: DataSnapshot, val previousChildName: String?) : ChildEvent
 
-fun Query.children(): Flow<ChildEvent> = callbackFlow {
+val Query.children: Flow<ChildEvent> get() = callbackFlow {
     val listener = object : ChildEventListener {
         override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
             trySendBlocking(ChildAdded(snapshot, previousChildName))
@@ -48,7 +48,7 @@ fun Query.children(): Flow<ChildEvent> = callbackFlow {
     }
 }.buffer(Channel.UNLIMITED)
 
-fun Query.childrenWithInitialData(): Flow<FirebaseEvent> = callbackFlow {
+val Query.childrenWithInitialData: Flow<FirebaseEvent> get() = callbackFlow {
     var initialDataLoaded = false
     val childListener = object : ChildEventListener {
         override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
