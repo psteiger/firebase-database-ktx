@@ -14,15 +14,13 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 
-val Query.snapshots: Flow<DataSnapshot>
-    get() = callbackFlow {
-        val listener = asValueEventListener()
-        addValueEventListener(listener)
-        awaitClose { removeEventListener(listener) }
-    }.buffer(Channel.UNLIMITED)
+fun Query.values(): Flow<DataSnapshot> = callbackFlow {
+    val listener = asValueEventListener()
+    addValueEventListener(listener)
+    awaitClose { removeEventListener(listener) }
+}.buffer(Channel.UNLIMITED)
 
-inline fun <reified T> Query.values(): Flow<T?> =
-    snapshots.map { it.value<T>() }
+inline fun <reified T> Query.values(): Flow<T?> = values().map { it.value<T>() }
 
 private fun ProducerScope<DataSnapshot>.asValueEventListener() =
     object : ValueEventListener {
